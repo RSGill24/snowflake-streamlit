@@ -1,0 +1,2354 @@
+import streamlit as st
+from snowflake.snowpark.context import get_active_session
+import uuid
+import json
+import math
+from datetime import datetime, date, time
+from decimal import Decimal
+
+import pandas as pd
+import numpy as np
+
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+
+st.set_page_config(
+    page_title="Snowflake Data Copy Utility",
+    page_icon="❄️",
+    layout="wide"
+)
+
+
+# ============================================================
+# APPLICATION CONFIGURATION
+# ============================================================
+
+# Application/control location only.
+# Customer source and target databases are NOT hardcoded.
+
+APP_DATABASE = "DATA_COPY_APP_DB"
+APP_SCHEMA = "STREAMLIT"
+AUDIT_TABLE = f"{APP_DATABASE}.{APP_SCHEMA}.DATA_COPY_AUDIT"
+
+# Maximum number of rows loaded into the editor at one time.
+DEFAULT_EDIT_ROWS = 100
+
+
+# ============================================================
+# SNOWFLAKE SESSION
+# ============================================================
+
+session = get_active_session()
+
+
+# ============================================================
+# TITLE
+# ============================================================
+
+st.title("❄️ Snowflake Data Copy Utility")
+
+st.caption(
+    "Parameterized Snowflake database, schema and table copy utility "
+    "with source data editing"
+)
+
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def quote_identifier(value):
+    """
+    Safely quote Snowflake identifiers.
+    """
+
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def escape_sql_string(value):
+    """
+    Escape SQL string literals.
+    """
+
+    return str(value).replace("'", "''")
+
+
+def full_name(database, schema, table=None):
+
+    if table:
+
+        return (
+            f"{quote_identifier(database)}."
+            f"{quote_identifier(schema)}."
+            f"{quote_identifier(table)}"
+        )
+
+    return (
+        f"{quote_identifier(database)}."
+        f"{quote_identifier(schema)}"
+    )
+
+
+def normalize_value(value):
+    """
+    Convert pandas / Python values into values suitable for
+    Snowflake comparison and binding.
+    """
+
+    if value is None:
+        return None
+
+    try:
+
+        if pd.isna(value):
+            return None
+
+    except Exception:
+        pass
+
+    if isinstance(value, pd.Timestamp):
+
+        if pd.isna(value):
+            return None
+
+        return value.to_pydatetime()
+
+    if isinstance(value, datetime):
+
+        return value
+
+    if isinstance(value, date):
+
+        return value
+
+    if isinstance(value, time):
+
+        return value
+
+    if isinstance(value, Decimal):
+
+        return value
+
+    if isinstance(value, bool):
+
+        return value
+
+    # Snowpark bind parameters do not accept NumPy scalar types
+    # such as numpy.int8 / numpy.int64 directly. Streamlit's
+    # data_editor commonly returns NumPy scalars for numeric cells.
+    # Convert them to native Python types before binding.
+    if isinstance(value, np.integer):
+
+        return int(value)
+
+    if isinstance(value, np.floating):
+
+        if np.isnan(value):
+
+            return None
+
+        return float(value)
+
+    if isinstance(value, np.bool_):
+
+        return bool(value)
+
+    if isinstance(value, (int, float)):
+
+        if isinstance(value, float) and math.isnan(value):
+
+            return None
+
+        return value
+
+    return value
+
+
+# ============================================================
+# DATABASE DISCOVERY
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_databases():
+
+    rows = session.sql(
+        "SHOW DATABASES"
+    ).collect()
+
+    databases = []
+
+    for row in rows:
+
+        db_name = row["name"]
+
+        # Do not expose application/control database
+        if db_name.upper() != APP_DATABASE.upper():
+
+            databases.append(db_name)
+
+    return sorted(databases)
+
+
+# ============================================================
+# SCHEMA DISCOVERY
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_schemas(database):
+
+    db = quote_identifier(database)
+
+    query = f"""
+        SELECT SCHEMA_NAME
+        FROM {db}.INFORMATION_SCHEMA.SCHEMATA
+        WHERE SCHEMA_NAME <> 'INFORMATION_SCHEMA'
+        ORDER BY SCHEMA_NAME
+    """
+
+    rows = session.sql(query).collect()
+
+    return [
+        row["SCHEMA_NAME"]
+        for row in rows
+    ]
+
+
+# ============================================================
+# TABLE DISCOVERY
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_tables(database, schema):
+
+    db = quote_identifier(database)
+
+    schema_value = escape_sql_string(schema)
+
+    query = f"""
+        SELECT TABLE_NAME
+        FROM {db}.INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = '{schema_value}'
+          AND TABLE_TYPE = 'BASE TABLE'
+        ORDER BY TABLE_NAME
+    """
+
+    rows = session.sql(query).collect()
+
+    return [
+        row["TABLE_NAME"]
+        for row in rows
+    ]
+
+
+# ============================================================
+# COLUMN METADATA
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_columns(database, schema, table):
+
+    db = quote_identifier(database)
+
+    schema_value = escape_sql_string(schema)
+    table_value = escape_sql_string(table)
+
+    query = f"""
+        SELECT
+            COLUMN_NAME,
+            DATA_TYPE,
+            ORDINAL_POSITION,
+            IS_NULLABLE
+        FROM {db}.INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = '{schema_value}'
+          AND TABLE_NAME = '{table_value}'
+        ORDER BY ORDINAL_POSITION
+    """
+
+    rows = session.sql(query).collect()
+
+    return [
+        {
+            "COLUMN_NAME": row["COLUMN_NAME"],
+            "DATA_TYPE": row["DATA_TYPE"],
+            "ORDINAL_POSITION": row["ORDINAL_POSITION"],
+            "IS_NULLABLE": row["IS_NULLABLE"]
+        }
+        for row in rows
+    ]
+
+
+# ============================================================
+# PRIMARY KEY DISCOVERY
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_primary_key_columns(
+    database,
+    schema,
+    table
+):
+
+    db = quote_identifier(database)
+
+    schema_value = escape_sql_string(schema)
+    table_value = escape_sql_string(table)
+
+    query = f"""
+        SELECT
+            kcu.COLUMN_NAME,
+            kcu.ORDINAL_POSITION
+        FROM {db}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+        JOIN {db}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+          ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+         AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+         AND tc.TABLE_NAME = kcu.TABLE_NAME
+        WHERE tc.TABLE_SCHEMA = '{schema_value}'
+          AND tc.TABLE_NAME = '{table_value}'
+          AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+        ORDER BY kcu.ORDINAL_POSITION
+    """
+
+    try:
+
+        rows = session.sql(query).collect()
+
+        return [
+            row["COLUMN_NAME"]
+            for row in rows
+        ]
+
+    except Exception:
+
+        return []
+
+
+# ============================================================
+# ROW COUNT
+# ============================================================
+
+def get_row_count(
+    database,
+    schema,
+    table
+):
+
+    query = f"""
+        SELECT COUNT(*) AS ROW_COUNT
+        FROM {full_name(database, schema, table)}
+    """
+
+    return session.sql(
+        query
+    ).collect()[0]["ROW_COUNT"]
+
+
+# ============================================================
+# SCHEMA EXISTS
+# ============================================================
+
+def schema_exists(
+    database,
+    schema
+):
+
+    db = quote_identifier(database)
+
+    schema_value = escape_sql_string(schema)
+
+    query = f"""
+        SELECT COUNT(*) AS CNT
+        FROM {db}.INFORMATION_SCHEMA.SCHEMATA
+        WHERE SCHEMA_NAME = '{schema_value}'
+    """
+
+    return session.sql(
+        query
+    ).collect()[0]["CNT"] > 0
+
+
+# ============================================================
+# TABLE EXISTS
+# ============================================================
+
+def table_exists(
+    database,
+    schema,
+    table
+):
+
+    db = quote_identifier(database)
+
+    schema_value = escape_sql_string(schema)
+    table_value = escape_sql_string(table)
+
+    query = f"""
+        SELECT COUNT(*) AS CNT
+        FROM {db}.INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = '{schema_value}'
+          AND TABLE_NAME = '{table_value}'
+          AND TABLE_TYPE = 'BASE TABLE'
+    """
+
+    return session.sql(
+        query
+    ).collect()[0]["CNT"] > 0
+
+
+# ============================================================
+# CREATE SCHEMA
+# ============================================================
+
+def create_schema(
+    database,
+    schema
+):
+
+    query = f"""
+        CREATE SCHEMA IF NOT EXISTS
+        {full_name(database, schema)}
+    """
+
+    session.sql(query).collect()
+
+
+# ============================================================
+# CREATE TABLE LIKE SOURCE
+# ============================================================
+
+def create_table_like(
+    source_db,
+    source_schema,
+    source_table,
+    target_db,
+    target_schema,
+    target_table
+):
+
+    source = full_name(
+        source_db,
+        source_schema,
+        source_table
+    )
+
+    target = full_name(
+        target_db,
+        target_schema,
+        target_table
+    )
+
+    query = f"""
+        CREATE TABLE IF NOT EXISTS
+        {target}
+        LIKE {source}
+    """
+
+    session.sql(query).collect()
+
+
+# ============================================================
+# GET COMMON COLUMNS
+# ============================================================
+
+def get_common_columns(
+    source_db,
+    source_schema,
+    source_table,
+    target_db,
+    target_schema,
+    target_table
+):
+
+    source_columns = get_columns(
+        source_db,
+        source_schema,
+        source_table
+    )
+
+    target_columns = get_columns(
+        target_db,
+        target_schema,
+        target_table
+    )
+
+    target_names = {
+        c["COLUMN_NAME"]
+        for c in target_columns
+    }
+
+    return [
+        c["COLUMN_NAME"]
+        for c in source_columns
+        if c["COLUMN_NAME"] in target_names
+    ]
+
+
+# ============================================================
+# COPY TABLE DATA
+# ============================================================
+
+def copy_table_data(
+    source_db,
+    source_schema,
+    source_table,
+    target_db,
+    target_schema,
+    target_table,
+    copy_mode
+):
+
+    source = full_name(
+        source_db,
+        source_schema,
+        source_table
+    )
+
+    target = full_name(
+        target_db,
+        target_schema,
+        target_table
+    )
+
+    common_columns = get_common_columns(
+        source_db,
+        source_schema,
+        source_table,
+        target_db,
+        target_schema,
+        target_table
+    )
+
+    if not common_columns:
+
+        raise Exception(
+            f"No common columns found between "
+            f"{source_table} and {target_table}."
+        )
+
+    columns = ", ".join(
+        quote_identifier(column)
+        for column in common_columns
+    )
+
+    # --------------------------------------------------------
+    # REPLACE
+    # --------------------------------------------------------
+
+    if copy_mode == "REPLACE":
+
+        session.sql(
+            f"TRUNCATE TABLE {target}"
+        ).collect()
+
+    # --------------------------------------------------------
+    # INSERT
+    # --------------------------------------------------------
+
+    query = f"""
+        INSERT INTO {target}
+        (
+            {columns}
+        )
+        SELECT
+            {columns}
+        FROM {source}
+    """
+
+    session.sql(query).collect()
+
+
+# ============================================================
+# PREVIEW TABLE
+# ============================================================
+
+def preview_table(
+    database,
+    schema,
+    table,
+    limit=10
+):
+
+    query = f"""
+        SELECT *
+        FROM {full_name(database, schema, table)}
+        LIMIT {int(limit)}
+    """
+
+    return session.sql(
+        query
+    ).to_pandas()
+
+
+# ============================================================
+# GET EDITABLE SOURCE DATA
+# ============================================================
+
+def get_editable_data(
+    database,
+    schema,
+    table,
+    limit
+):
+
+    query = f"""
+        SELECT *
+        FROM {full_name(database, schema, table)}
+        LIMIT {int(limit)}
+    """
+
+    return session.sql(
+        query
+    ).to_pandas()
+
+
+# ============================================================
+# BUILD NULL-SAFE WHERE CONDITION
+# ============================================================
+
+def build_null_safe_condition(
+    columns,
+    row,
+    parameter_values
+):
+
+    conditions = []
+
+    for column in columns:
+
+        value = normalize_value(
+            row[column]
+        )
+
+        column_sql = quote_identifier(
+            column
+        )
+
+        if value is None:
+
+            conditions.append(
+                f"{column_sql} IS NULL"
+            )
+
+        else:
+
+            conditions.append(
+                f"{column_sql} = ?"
+            )
+
+            parameter_values.append(
+                value
+            )
+
+    if not conditions:
+
+        raise Exception(
+            "Unable to build row identification condition."
+        )
+
+    return " AND ".join(
+        conditions
+    )
+
+
+# ============================================================
+# FIND EXACT ROW COUNT
+# ============================================================
+
+def count_matching_row(
+    database,
+    schema,
+    table,
+    columns,
+    row
+):
+
+    parameter_values = []
+
+    condition = build_null_safe_condition(
+        columns,
+        row,
+        parameter_values
+    )
+
+    query = f"""
+        SELECT COUNT(*) AS CNT
+        FROM {full_name(database, schema, table)}
+        WHERE {condition}
+    """
+
+    result = session.sql(
+        query,
+        params=parameter_values
+    ).collect()
+
+    return result[0]["CNT"]
+
+
+# ============================================================
+# UPDATE SOURCE ROW
+# ============================================================
+
+def update_source_row(
+    database,
+    schema,
+    table,
+    key_columns,
+    original_row,
+    updated_row,
+    all_columns
+):
+
+    # --------------------------------------------------------
+    # Determine columns that changed
+    # --------------------------------------------------------
+
+    changed_columns = []
+
+    for column in all_columns:
+
+        old_value = normalize_value(
+            original_row[column]
+        )
+
+        new_value = normalize_value(
+            updated_row[column]
+        )
+
+        if old_value != new_value:
+
+            changed_columns.append(
+                column
+            )
+
+    if not changed_columns:
+
+        return "NO_CHANGE"
+
+    # --------------------------------------------------------
+    # Prefer primary key when available
+    # --------------------------------------------------------
+
+    if key_columns:
+
+        match_columns = key_columns
+
+    else:
+
+        match_columns = all_columns
+
+    # --------------------------------------------------------
+    # Verify row uniqueness
+    # --------------------------------------------------------
+
+    matching_count = count_matching_row(
+        database,
+        schema,
+        table,
+        match_columns,
+        original_row
+    )
+
+    if matching_count == 0:
+
+        raise Exception(
+            "The original row could not be found. "
+            "The source table may have changed."
+        )
+
+    if matching_count > 1:
+
+        raise Exception(
+            f"The row is not uniquely identifiable. "
+            f"{matching_count} rows match the original values. "
+            f"Add a primary key to the table before editing this row."
+        )
+
+    # --------------------------------------------------------
+    # Build UPDATE
+    # --------------------------------------------------------
+
+    set_clauses = []
+
+    params = []
+
+    for column in changed_columns:
+
+        set_clauses.append(
+            f"{quote_identifier(column)} = ?"
+        )
+
+        params.append(
+            normalize_value(
+                updated_row[column]
+            )
+        )
+
+    where_params = []
+
+    where_condition = build_null_safe_condition(
+        match_columns,
+        original_row,
+        where_params
+    )
+
+    params.extend(
+        where_params
+    )
+
+    query = f"""
+        UPDATE {full_name(database, schema, table)}
+        SET {", ".join(set_clauses)}
+        WHERE {where_condition}
+    """
+
+    session.sql(
+        query,
+        params=params
+    ).collect()
+
+    return "UPDATED"
+
+
+# ============================================================
+# DELETE SOURCE ROW
+# ============================================================
+
+def delete_source_row(
+    database,
+    schema,
+    table,
+    key_columns,
+    original_row,
+    all_columns
+):
+
+    if key_columns:
+
+        match_columns = key_columns
+
+    else:
+
+        match_columns = all_columns
+
+    # --------------------------------------------------------
+    # Verify uniqueness
+    # --------------------------------------------------------
+
+    matching_count = count_matching_row(
+        database,
+        schema,
+        table,
+        match_columns,
+        original_row
+    )
+
+    if matching_count == 0:
+
+        raise Exception(
+            "The row could not be found. "
+            "The source table may have changed."
+        )
+
+    if matching_count > 1:
+
+        raise Exception(
+            f"Delete cancelled because {matching_count} rows "
+            f"match the selected row. "
+            f"Add a primary key before deleting duplicate rows."
+        )
+
+    # --------------------------------------------------------
+    # Build DELETE
+    # --------------------------------------------------------
+
+    params = []
+
+    where_condition = build_null_safe_condition(
+        match_columns,
+        original_row,
+        params
+    )
+
+    query = f"""
+        DELETE FROM {full_name(database, schema, table)}
+        WHERE {where_condition}
+    """
+
+    session.sql(
+        query,
+        params=params
+    ).collect()
+
+    return "DELETED"
+
+
+# ============================================================
+# INSERT NEW SOURCE ROW
+# ============================================================
+
+def insert_source_row(
+    database,
+    schema,
+    table,
+    row,
+    columns
+):
+
+    insert_columns = []
+    placeholders = []
+    params = []
+
+    for column in columns:
+
+        value = normalize_value(
+            row.get(column)
+        )
+
+        insert_columns.append(
+            quote_identifier(column)
+        )
+
+        placeholders.append("?")
+
+        params.append(
+            value
+        )
+
+    query = f"""
+        INSERT INTO {full_name(database, schema, table)}
+        (
+            {", ".join(insert_columns)}
+        )
+        VALUES
+        (
+            {", ".join(placeholders)}
+        )
+    """
+
+    session.sql(
+        query,
+        params=params
+    ).collect()
+
+    return "INSERTED"
+
+
+# ============================================================
+# SAVE EDITOR CHANGES
+# ============================================================
+
+def save_source_editor_changes(
+    database,
+    schema,
+    table,
+    original_df,
+    edited_df,
+    columns,
+    primary_key_columns
+):
+
+    results = []
+
+    # --------------------------------------------------------
+    # Make copies
+    # --------------------------------------------------------
+
+    original = original_df.copy()
+    edited = edited_df.copy()
+
+    # --------------------------------------------------------
+    # Ensure column order
+    # --------------------------------------------------------
+
+    edited = edited[
+        columns
+    ]
+
+    original = original[
+        columns
+    ]
+
+    # --------------------------------------------------------
+    # Existing rows
+    # --------------------------------------------------------
+
+    original_count = len(original)
+    edited_count = len(edited)
+
+    common_count = min(
+        original_count,
+        edited_count
+    )
+
+    # --------------------------------------------------------
+    # Process existing rows by position
+    #
+    # st.data_editor preserves existing row ordering.
+    # --------------------------------------------------------
+
+    for index in range(common_count):
+
+        original_row = original.iloc[index]
+        edited_row = edited.iloc[index]
+
+        old_values = [
+            normalize_value(
+                original_row[column]
+            )
+            for column in columns
+        ]
+
+        new_values = [
+            normalize_value(
+                edited_row[column]
+            )
+            for column in columns
+        ]
+
+        # ----------------------------------------------------
+        # Deleted row
+        # ----------------------------------------------------
+
+        if index >= edited_count:
+
+            delete_source_row(
+                database,
+                schema,
+                table,
+                primary_key_columns,
+                original_row,
+                columns
+            )
+
+            results.append({
+                "Action": "DELETE",
+                "Row": index + 1,
+                "Status": "SUCCESS"
+            })
+
+            continue
+
+        # ----------------------------------------------------
+        # Changed row
+        # ----------------------------------------------------
+
+        if old_values != new_values:
+
+            action = update_source_row(
+                database,
+                schema,
+                table,
+                primary_key_columns,
+                original_row,
+                edited_row,
+                columns
+            )
+
+            if action != "NO_CHANGE":
+
+                results.append({
+                    "Action": "UPDATE",
+                    "Row": index + 1,
+                    "Status": "SUCCESS"
+                })
+
+    # --------------------------------------------------------
+    # Detect rows deleted from middle/end
+    #
+    # Streamlit data editor can return fewer rows after
+    # deletion. Compare original and edited positions.
+    # --------------------------------------------------------
+
+    if edited_count < original_count:
+
+        for index in range(
+            edited_count,
+            original_count
+        ):
+
+            original_row = original.iloc[index]
+
+            delete_source_row(
+                database,
+                schema,
+                table,
+                primary_key_columns,
+                original_row,
+                columns
+            )
+
+            results.append({
+                "Action": "DELETE",
+                "Row": index + 1,
+                "Status": "SUCCESS"
+            })
+
+    # --------------------------------------------------------
+    # New rows
+    #
+    # Dynamic rows are appended by Streamlit.
+    # --------------------------------------------------------
+
+    if edited_count > original_count:
+
+        for index in range(
+            original_count,
+            edited_count
+        ):
+
+            new_row = edited.iloc[index]
+
+            insert_source_row(
+                database,
+                schema,
+                table,
+                new_row,
+                columns
+            )
+
+            results.append({
+                "Action": "INSERT",
+                "Row": index + 1,
+                "Status": "SUCCESS"
+            })
+
+    return results
+
+
+# ============================================================
+# WRITE AUDIT
+# ============================================================
+
+def write_audit(
+    run_id,
+    source_db,
+    source_schema,
+    source_table,
+    target_db,
+    target_schema,
+    target_table,
+    copy_mode,
+    source_count,
+    target_count,
+    status,
+    error_message
+):
+
+    user = session.sql(
+        "SELECT CURRENT_USER()"
+    ).collect()[0][0]
+
+    query = f"""
+        INSERT INTO {full_name(
+            APP_DATABASE,
+            APP_SCHEMA,
+            "DATA_COPY_AUDIT"
+        )}
+        (
+            RUN_ID,
+            RUN_TIMESTAMP,
+            SOURCE_DATABASE,
+            SOURCE_SCHEMA,
+            SOURCE_TABLE,
+            TARGET_DATABASE,
+            TARGET_SCHEMA,
+            TARGET_TABLE,
+            COPY_MODE,
+            SOURCE_ROW_COUNT,
+            TARGET_ROW_COUNT,
+            STATUS,
+            ERROR_MESSAGE,
+            EXECUTED_BY
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+
+    session.sql(
+        query,
+        params=[
+            run_id,
+            datetime.now(),
+            source_db,
+            source_schema,
+            source_table,
+            target_db,
+            target_schema,
+            target_table,
+            copy_mode,
+            source_count,
+            target_count,
+            status,
+            error_message,
+            user
+        ]
+    ).collect()
+
+
+# ============================================================
+# HEADER
+# ============================================================
+
+st.divider()
+
+st.subheader(
+    "1. Select Source and Target"
+)
+
+
+# ============================================================
+# DATABASE DISCOVERY
+# ============================================================
+
+databases = get_databases()
+
+if not databases:
+
+    st.error(
+        "No accessible databases were found."
+    )
+
+    st.stop()
+
+
+# ============================================================
+# SOURCE / TARGET
+# ============================================================
+
+source_col, target_col = st.columns(2)
+
+
+# ============================================================
+# SOURCE
+# ============================================================
+
+with source_col:
+
+    st.markdown("### 📤 Source")
+
+    source_db = st.selectbox(
+        "Source Database",
+        databases,
+        key="source_db"
+    )
+
+    source_schemas = get_schemas(
+        source_db
+    )
+
+    if not source_schemas:
+
+        st.warning(
+            "No accessible schemas found."
+        )
+
+        st.stop()
+
+    source_schema = st.selectbox(
+        "Source Schema",
+        source_schemas,
+        key="source_schema"
+    )
+
+    source_tables = get_tables(
+        source_db,
+        source_schema
+    )
+
+    if not source_tables:
+
+        st.warning(
+            "No accessible source tables found."
+        )
+
+        st.stop()
+
+
+# ============================================================
+# TARGET
+# ============================================================
+
+with target_col:
+
+    st.markdown("### 📥 Target")
+
+    target_db = st.selectbox(
+        "Target Database",
+        databases,
+        key="target_db"
+    )
+
+    target_schemas = get_schemas(
+        target_db
+    )
+
+    target_schema_option = st.selectbox(
+        "Target Schema",
+        [
+            "-- CREATE NEW SCHEMA --"
+        ] + target_schemas,
+        key="target_schema"
+    )
+
+    if target_schema_option == "-- CREATE NEW SCHEMA --":
+
+        target_schema = st.text_input(
+            "New Target Schema Name",
+            value=source_schema,
+            key="new_target_schema"
+        )
+
+        target_schema = target_schema.strip().upper()
+
+    else:
+
+        target_schema = target_schema_option
+
+
+
+# ============================================================
+# MAIN WORKSPACE
+# ============================================================
+
+st.divider()
+
+st.subheader("2. Data Management Workspace")
+
+st.caption(
+    "Use the tabs below to keep source data maintenance and "
+    "database copy operations separate."
+)
+
+edit_tab, copy_tab = st.tabs(
+    [
+        "✏️ Source Data Editing",
+        "📋 Copy Data"
+    ]
+)
+
+
+# ============================================================
+# TAB 1 — SOURCE DATA EDITING
+# ============================================================
+
+with edit_tab:
+
+    st.markdown("## ✏️ Source Data Editing")
+
+    st.info(
+        "Edit, add, or delete rows directly in the selected "
+        "SOURCE Snowflake table. Changes are written to Snowflake "
+        "only when you click **Save Changes**."
+    )
+
+    st.caption(
+        "For safety, only the rows loaded into the editor are "
+        "available for editing. A primary key is preferred for "
+        "reliable row identification. Numeric values are converted "
+        "to Snowflake-compatible Python types before saving."
+    )
+
+    edit_col1, edit_col2, edit_col3 = st.columns([2, 1, 1])
+
+    with edit_col1:
+
+        edit_table = st.selectbox(
+            "Source Table",
+            source_tables,
+            key="edit_table"
+        )
+
+    with edit_col2:
+
+        edit_row_limit = st.selectbox(
+            "Rows to Load",
+            [10, 50, 100, 500, 1000],
+            index=2,
+            key="edit_row_limit"
+        )
+
+    with edit_col3:
+
+        st.write("")
+        st.write("")
+
+        load_editor = st.button(
+            "📥 Load Data",
+            type="primary",
+            use_container_width=True
+        )
+
+    # --------------------------------------------------------
+    # PRIMARY KEY INFORMATION
+    # --------------------------------------------------------
+
+    primary_key_columns = get_primary_key_columns(
+        source_db,
+        source_schema,
+        edit_table
+    )
+
+    if primary_key_columns:
+
+        st.success(
+            "🔑 Primary Key: "
+            + ", ".join(primary_key_columns)
+        )
+
+    else:
+
+        st.warning(
+            "⚠️ No primary key detected. Edit/Delete will use "
+            "the original values of all columns to identify a row. "
+            "Duplicate rows cannot be safely edited or deleted."
+        )
+
+    # --------------------------------------------------------
+    # LOAD DATA
+    # --------------------------------------------------------
+
+    if load_editor:
+
+        try:
+
+            editor_data = get_editable_data(
+                source_db,
+                source_schema,
+                edit_table,
+                edit_row_limit
+            )
+
+            st.session_state[
+                "editor_original_data"
+            ] = editor_data.copy()
+
+            st.session_state[
+                "editor_loaded_table"
+            ] = edit_table
+
+            st.session_state[
+                "editor_version"
+            ] = st.session_state.get(
+                "editor_version",
+                0
+            ) + 1
+
+            st.success(
+                f"Loaded {len(editor_data)} rows from "
+                f"`{source_db}.{source_schema}.{edit_table}`."
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Unable to load source data: {e}"
+            )
+
+    # --------------------------------------------------------
+    # DISPLAY EDITOR
+    # --------------------------------------------------------
+
+    if (
+        "editor_original_data" in st.session_state
+        and
+        st.session_state.get(
+            "editor_loaded_table"
+        ) == edit_table
+    ):
+
+        original_editor_data = st.session_state[
+            "editor_original_data"
+        ].copy()
+
+        editor_columns = list(
+            original_editor_data.columns
+        )
+
+        st.markdown("### 📝 Edit Source Rows")
+
+        st.caption(
+            "• Edit cells directly  • Add rows at the bottom  "
+            "• Delete rows using the row control  • Save when ready"
+        )
+
+        edited_editor_data = st.data_editor(
+            original_editor_data,
+            num_rows="dynamic",
+            use_container_width=True,
+            key=(
+                f"source_editor_{edit_table}_"
+                f"{st.session_state.get('editor_version', 0)}"
+            )
+        )
+
+        st.divider()
+
+        save_col, refresh_col = st.columns(2)
+
+        with save_col:
+
+            save_changes = st.button(
+                "💾 Save Changes to Source Database",
+                type="primary",
+                use_container_width=True
+            )
+
+        with refresh_col:
+
+            refresh_editor = st.button(
+                "🔄 Refresh Source Data",
+                use_container_width=True
+            )
+
+        # ----------------------------------------------------
+        # REFRESH
+        # ----------------------------------------------------
+
+        if refresh_editor:
+
+            try:
+
+                refreshed_data = get_editable_data(
+                    source_db,
+                    source_schema,
+                    edit_table,
+                    edit_row_limit
+                )
+
+                st.session_state[
+                    "editor_original_data"
+                ] = refreshed_data.copy()
+
+                st.session_state[
+                    "editor_version"
+                ] += 1
+
+                st.success(
+                    "Source data refreshed."
+                )
+
+                st.rerun()
+
+            except Exception as e:
+
+                st.error(
+                    f"Refresh failed: {e}"
+                )
+
+        # ----------------------------------------------------
+        # SAVE
+        # ----------------------------------------------------
+
+        if save_changes:
+
+            run_id = str(uuid.uuid4())
+
+            try:
+
+                with st.spinner(
+                    "Saving changes directly to Snowflake..."
+                ):
+
+                    change_results = save_source_editor_changes(
+                        source_db,
+                        source_schema,
+                        edit_table,
+                        original_editor_data,
+                        edited_editor_data,
+                        editor_columns,
+                        primary_key_columns
+                    )
+
+                if change_results:
+
+                    st.success(
+                        "✅ Source database changes saved successfully."
+                    )
+
+                    st.dataframe(
+                        change_results,
+                        use_container_width=True
+                    )
+
+                else:
+
+                    st.info(
+                        "No changes were detected."
+                    )
+
+                # Reload from Snowflake so the editor reflects
+                # the actual database state.
+
+                refreshed_data = get_editable_data(
+                    source_db,
+                    source_schema,
+                    edit_table,
+                    edit_row_limit
+                )
+
+                st.session_state[
+                    "editor_original_data"
+                ] = refreshed_data.copy()
+
+                st.session_state[
+                    "editor_version"
+                ] += 1
+
+                st.info(
+                    f"Run ID: {run_id}"
+                )
+
+                st.rerun()
+
+            except Exception as e:
+
+                st.error(
+                    f"❌ Save failed: {e}"
+                )
+
+                st.warning(
+                    "No automatic rollback is performed. "
+                    "Review the source table before retrying."
+                )
+
+
+# ============================================================
+# TAB 2 — COPY DATA
+# ============================================================
+
+with copy_tab:
+
+    st.markdown("## 📋 Copy Data")
+
+    st.caption(
+        "Copy the selected source schema to the target using "
+        "one of the supported copy operations."
+    )
+
+    # ========================================================
+    # COPY OPERATION
+    # ========================================================
+
+    st.markdown("### 1. Copy Operation")
+
+    copy_operation = st.radio(
+        "What would you like to copy?",
+        [
+            "Copy Schema Only",
+            "Copy Data Only",
+            "Copy Schema and Data"
+        ],
+        horizontal=True,
+        key="copy_operation"
+    )
+
+    if copy_operation == "Copy Schema Only":
+
+        st.info(
+            "📁 **Schema Only** — Creates the target schema "
+            "and copies the structure of all source tables. "
+            "No table data will be copied."
+        )
+
+    elif copy_operation == "Copy Data Only":
+
+        st.info(
+            "📊 **Data Only** — Copies data into existing "
+            "target tables. The target schema and tables "
+            "must already exist."
+        )
+
+    else:
+
+        st.info(
+            "📁 + 📊 **Schema and Data** — Creates the target "
+            "schema when needed, creates missing target tables, "
+            "and copies the source data."
+        )
+
+    # ========================================================
+    # DATA COPY MODE
+    # ========================================================
+
+    if copy_operation in [
+        "Copy Data Only",
+        "Copy Schema and Data"
+    ]:
+
+        st.markdown("### 2. Data Copy Mode")
+
+        copy_mode = st.radio(
+            "How should existing target data be handled?",
+            [
+                "APPEND",
+                "REPLACE"
+            ],
+            horizontal=True,
+            key="copy_mode"
+        )
+
+        if copy_mode == "APPEND":
+
+            st.caption(
+                "APPEND adds source records to the target tables."
+            )
+
+        else:
+
+            st.warning(
+                "REPLACE removes existing target records "
+                "before copying."
+            )
+
+    else:
+
+        copy_mode = "NONE"
+
+    # ========================================================
+    # SOURCE SCHEMA SUMMARY
+    # ========================================================
+
+    st.markdown("### 3. Source Schema Summary")
+
+    st.write(
+        f"**Source:** `{source_db}.{source_schema}`"
+    )
+
+    summary_col1, summary_col2 = st.columns(2)
+
+    with summary_col1:
+
+        st.metric(
+            "Tables Discovered",
+            len(source_tables)
+        )
+
+    with summary_col2:
+
+        try:
+
+            total_source_rows = sum(
+                int(get_row_count(
+                    source_db,
+                    source_schema,
+                    table
+                ))
+                for table in source_tables
+            )
+
+        except Exception:
+
+            total_source_rows = 0
+
+        st.metric(
+            "Total Source Rows",
+            total_source_rows
+        )
+
+    table_summary = []
+
+    for table in source_tables:
+
+        try:
+
+            row_count = get_row_count(
+                source_db,
+                source_schema,
+                table
+            )
+
+        except Exception:
+
+            row_count = "N/A"
+
+        table_summary.append({
+            "Source Table": table,
+            "Rows": row_count
+        })
+
+    st.dataframe(
+        table_summary,
+        use_container_width=True
+    )
+
+    # ========================================================
+    # TARGET VALIDATION
+    # ========================================================
+
+    st.markdown("### 4. Target Validation")
+
+    target_schema_exists = False
+
+    try:
+
+        target_schema_exists = schema_exists(
+            target_db,
+            target_schema
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Unable to validate target schema: {e}"
+        )
+
+    if copy_operation == "Copy Schema Only":
+
+        if target_schema_exists:
+
+            st.warning(
+                f"Target schema `{target_db}.{target_schema}` "
+                "already exists. Existing tables will be reused."
+            )
+
+        else:
+
+            st.success(
+                f"Target schema `{target_db}.{target_schema}` "
+                "will be created."
+            )
+
+    elif copy_operation == "Copy Data Only":
+
+        if not target_schema_exists:
+
+            st.error(
+                f"Target schema `{target_db}.{target_schema}` "
+                "does not exist."
+            )
+
+            st.warning(
+                "Data Only requires an existing target schema "
+                "and existing target tables."
+            )
+
+        else:
+
+            st.success(
+                f"Target schema `{target_db}.{target_schema}` exists."
+            )
+
+    else:
+
+        if target_schema_exists:
+
+            st.warning(
+                f"Target schema `{target_db}.{target_schema}` "
+                "already exists. Existing tables will be reused."
+            )
+
+        else:
+
+            st.success(
+                f"Target schema `{target_db}.{target_schema}` "
+                "will be created."
+            )
+
+    # ========================================================
+    # TARGET TABLE SELECTION / MATCHING
+    # ========================================================
+
+    st.markdown("### 5. Target Table Selection")
+
+    target_tables = []
+
+    if target_schema_exists:
+
+        try:
+
+            target_tables = get_tables(
+                target_db,
+                target_schema
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Unable to retrieve target tables: {e}"
+            )
+
+    # --------------------------------------------------------
+    # DATA ONLY
+    # --------------------------------------------------------
+    # Give the user an explicit target-table dropdown for
+    # every source table. Source and target names can differ.
+
+    target_table_mapping = {}
+
+    if copy_operation == "Copy Data Only":
+
+        if not target_schema_exists:
+
+            st.error(
+                "Select an existing target schema first. "
+                "Copy Data Only requires an existing target schema."
+            )
+
+            data_only_blocked = True
+
+        elif not target_tables:
+
+            st.error(
+                f"No target tables were found in "
+                f"`{target_db}.{target_schema}`."
+            )
+
+            st.warning(
+                "Create the target tables first, then use Copy Data Only."
+            )
+
+            data_only_blocked = True
+
+        else:
+
+            st.info(
+                "Select the target table for each source table. "
+                "Source and target table names do not have to match."
+            )
+
+            mapping_rows = []
+
+            for source_table in source_tables:
+
+                if source_table in target_tables:
+
+                    default_index = target_tables.index(source_table)
+
+                else:
+
+                    default_index = 0
+
+                selected_target = st.selectbox(
+                    f"Target table for `{source_table}`",
+                    target_tables,
+                    index=default_index,
+                    key=f"data_only_target_{source_table}"
+                )
+
+                target_table_mapping[source_table] = selected_target
+
+                mapping_rows.append({
+                    "Source Table": source_table,
+                    "Target Table": selected_target,
+                    "Target Exists": "YES"
+                })
+
+            st.dataframe(
+                mapping_rows,
+                use_container_width=True
+            )
+
+            data_only_blocked = False
+
+    else:
+
+        # Schema Only and Schema + Data use the source table
+        # name as the target table name.
+        for source_table in source_tables:
+            target_table_mapping[source_table] = source_table
+
+        validation_rows = []
+
+        for source_table in source_tables:
+
+            exists = source_table in target_tables
+
+            validation_rows.append({
+                "Source Table": source_table,
+                "Target Table": source_table,
+                "Target Exists": "YES" if exists else "NO",
+                "Action": "EXISTS" if exists else "WILL BE CREATED"
+            })
+
+        st.dataframe(
+            validation_rows,
+            use_container_width=True
+        )
+
+        data_only_blocked = False
+
+    # Keep the mapping available to the execution section.
+    st.session_state["target_table_mapping"] = target_table_mapping
+
+    # ========================================================
+    # SOURCE PREVIEW
+    # ========================================================
+
+    st.markdown("### 6. Source Data Preview")
+
+    preview_table_name = st.selectbox(
+        "Select table to preview",
+        source_tables,
+        key="preview_table"
+    )
+
+    if st.button(
+        "🔍 Preview Source Data",
+        key="preview_source_data"
+    ):
+
+        try:
+
+            source_count = get_row_count(
+                source_db,
+                source_schema,
+                preview_table_name
+            )
+
+            st.metric(
+                "Source Rows",
+                source_count
+            )
+
+            preview = preview_table(
+                source_db,
+                source_schema,
+                preview_table_name,
+                limit=10
+            )
+
+            st.dataframe(
+                preview,
+                use_container_width=True
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Preview failed: {e}"
+            )
+
+    # ========================================================
+    # EXECUTION SUMMARY
+    # ========================================================
+
+    st.markdown("### 7. Execution Summary")
+
+    summary_left, summary_right = st.columns(2)
+
+    with summary_left:
+
+        st.write(
+            f"**Source:** `{source_db}.{source_schema}`"
+        )
+
+        st.write(
+            f"**Operation:** `{copy_operation}`"
+        )
+
+    with summary_right:
+
+        st.write(
+            f"**Target:** `{target_db}.{target_schema}`"
+        )
+
+        if copy_operation != "Copy Schema Only":
+
+            st.write(
+                f"**Data Mode:** `{copy_mode}`"
+            )
+
+    # ========================================================
+    # CONFIRMATION
+    # ========================================================
+
+    st.divider()
+
+    confirm_text = st.checkbox(
+        "I confirm that I want to execute this copy operation.",
+        key="confirm_copy_operation"
+    )
+
+    # ========================================================
+    # EXECUTION
+    # ========================================================
+
+    if confirm_text:
+
+        if data_only_blocked:
+
+            st.error(
+                "Copy Data Only cannot be executed because "
+                "one or more required target tables are missing."
+            )
+
+        elif st.button(
+            "🚀 EXECUTE COPY",
+            type="primary",
+            use_container_width=True,
+            key="execute_copy"
+        ):
+
+            run_id = str(uuid.uuid4())
+
+            execution_results = []
+
+            try:
+
+                # =============================================
+                # CREATE TARGET SCHEMA
+                # =============================================
+
+                if copy_operation in [
+                    "Copy Schema Only",
+                    "Copy Schema and Data"
+                ]:
+
+                    if not target_schema_exists:
+
+                        with st.spinner(
+                            f"Creating target schema "
+                            f"`{target_db}.{target_schema}`..."
+                        ):
+
+                            create_schema(
+                                target_db,
+                                target_schema
+                            )
+
+                        st.success(
+                            "Target schema created."
+                        )
+
+                        target_schema_exists = True
+
+                # =============================================
+                # COPY EACH TABLE
+                # =============================================
+
+                progress = st.progress(0)
+
+                total_tables = len(source_tables)
+
+                for index, source_table in enumerate(
+                    source_tables
+                ):
+
+                    st.write(
+                        f"Processing `{source_table}`..."
+                    )
+
+                    # Data Only uses the target table selected by the user.
+                    # Other operations keep source and target table names aligned.
+                    target_table_mapping = st.session_state.get(
+                        "target_table_mapping",
+                        {}
+                    )
+
+                    target_table = target_table_mapping.get(
+                        source_table,
+                        source_table
+                    )
+
+                    table_source_count = 0
+                    table_target_count = 0
+
+                    # =========================================
+                    # SCHEMA ONLY
+                    # =========================================
+
+                    if copy_operation == "Copy Schema Only":
+
+                        if not table_exists(
+                            target_db,
+                            target_schema,
+                            target_table
+                        ):
+
+                            create_table_like(
+                                source_db,
+                                source_schema,
+                                source_table,
+                                target_db,
+                                target_schema,
+                                target_table
+                            )
+
+                            action = "SCHEMA_CREATED"
+
+                        else:
+
+                            action = "TABLE_ALREADY_EXISTS"
+
+                    # =========================================
+                    # SCHEMA + DATA
+                    # =========================================
+
+                    elif copy_operation == "Copy Schema and Data":
+
+                        if not table_exists(
+                            target_db,
+                            target_schema,
+                            target_table
+                        ):
+
+                            create_table_like(
+                                source_db,
+                                source_schema,
+                                source_table,
+                                target_db,
+                                target_schema,
+                                target_table
+                            )
+
+                        table_source_count = get_row_count(
+                            source_db,
+                            source_schema,
+                            source_table
+                        )
+
+                        copy_table_data(
+                            source_db,
+                            source_schema,
+                            source_table,
+                            target_db,
+                            target_schema,
+                            target_table,
+                            copy_mode
+                        )
+
+                        table_target_count = get_row_count(
+                            target_db,
+                            target_schema,
+                            target_table
+                        )
+
+                        action = "SCHEMA_AND_DATA_COPIED"
+
+                    # =========================================
+                    # DATA ONLY
+                    # =========================================
+
+                    else:
+
+                        if not target_table:
+                            raise Exception(
+                                f"No target table was selected for source table "
+                                f"`{source_table}`."
+                            )
+
+                        if not table_exists(
+                            target_db,
+                            target_schema,
+                            target_table
+                        ):
+
+                            raise Exception(
+                                f"Target table "
+                                f"{target_db}.{target_schema}."
+                                f"{target_table} does not exist. "
+                                f"Data Only requires existing "
+                                f"target tables."
+                            )
+
+                        table_source_count = get_row_count(
+                            source_db,
+                            source_schema,
+                            source_table
+                        )
+
+                        copy_table_data(
+                            source_db,
+                            source_schema,
+                            source_table,
+                            target_db,
+                            target_schema,
+                            target_table,
+                            copy_mode
+                        )
+
+                        table_target_count = get_row_count(
+                            target_db,
+                            target_schema,
+                            target_table
+                        )
+
+                        action = "DATA_COPIED"
+
+                    execution_results.append({
+                        "Source Table": source_table,
+                        "Target Table": target_table,
+                        "Source Rows": table_source_count,
+                        "Target Rows": table_target_count,
+                        "Action": action,
+                        "Status": "SUCCESS"
+                    })
+
+                    progress.progress(
+                        (index + 1) / total_tables
+                    )
+
+                # =============================================
+                # AUDIT
+                # =============================================
+
+                for result in execution_results:
+
+                    write_audit(
+                        run_id,
+                        source_db,
+                        source_schema,
+                        result["Source Table"],
+                        target_db,
+                        target_schema,
+                        result["Target Table"],
+                        copy_operation,
+                        result["Source Rows"],
+                        result["Target Rows"],
+                        "SUCCESS",
+                        None
+                    )
+
+                # =============================================
+                # RESULTS
+                # =============================================
+
+                st.divider()
+
+                st.subheader(
+                    "8. Execution Results"
+                )
+
+                st.success(
+                    "✅ Copy operation completed successfully."
+                )
+
+                st.info(
+                    f"Run ID: {run_id}"
+                )
+
+                st.dataframe(
+                    execution_results,
+                    use_container_width=True
+                )
+
+            except Exception as e:
+
+                error_message = str(e)
+
+                st.error(
+                    f"❌ Copy operation failed: {error_message}"
+                )
+
+                try:
+
+                    write_audit(
+                        run_id,
+                        source_db,
+                        source_schema,
+                        "SCHEMA_OPERATION",
+                        target_db,
+                        target_schema,
+                        "SCHEMA_OPERATION",
+                        copy_operation,
+                        0,
+                        0,
+                        "FAILED",
+                        error_message
+                    )
+
+                except Exception as audit_error:
+
+                    st.warning(
+                        f"Audit logging failed: {audit_error}"
+                    )
