@@ -1,0 +1,21 @@
+Hi Vaishali,
+
+I am working on deploying the Snowflake Data Copy Utility Streamlit application in Snowflake.
+
+I have attached the SQL deployment script that needs to be executed in the Snowflake environment. 
+While trying to execute the setup scripts, I am getting insufficient privilege errors for operations such as database/role creation and granting the required permissions.
+
+The attached script includes the required setup for the application, including:
+Application database and schema
+Application roles
+Audit table
+Required warehouse/compute permissions
+Source database/schema access
+Target database/schema access
+Required table-level permissions for the data copy and source-data editing functionality
+
+Could you please advise whether we should raise one consolidated ticket covering all the required Snowflake permissions/setup, or whether multiple tickets are required for the database/role creation and access grants?
+
+Once the appropriate permissions are provided, I can proceed with the deployment and validation of the Streamlit application.
+
+Thanks,
