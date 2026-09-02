@@ -1,0 +1,13 @@
+| Placeholder          | What you put                                                   |
+| -------------------- | -------------------------------------------------------------- |
+| `<APP_DATABASE>`     | `DATA_COPY_APP_DB`                                             |
+| `<APP_SCHEMA>`       | `STREAMLIT`                                                    |
+| `<APP_OWNER_ROLE>`   | `DATA_COPY_APP_OWNER`                                          |
+| `<APP_VIEWER_ROLE>`  | `DATA_COPY_APP_VIEWER`                                         |
+| `<APP_WAREHOUSE>`    | Customer-approved warehouse, e.g. `COMPUTE_WH`                 |
+| `<APP_COMPUTE_POOL>` | Customer-approved compute pool, e.g. `SYSTEM_COMPUTE_POOL_CPU` |
+| `<SOURCE_DATABASE>`  | Customer-approved source DB                                    |
+| `<SOURCE_SCHEMA>`    | Customer-approved source schema                                |
+| `<TARGET_DATABASE>`  | Customer-approved target DB                                    |
+| `<TARGET_SCHEMA>`    | Customer-approved target schema                                |
+| `<APP_NAME>`         | Your Streamlit app name, e.g. `DATA_COPY_APP`                  |
