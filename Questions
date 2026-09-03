@@ -1,0 +1,4 @@
+“Which diagnosis categories have the highest total billed amount?” — demonstrates business analytics.
+“Which pharmacy claims have a negative billed amount?” — demonstrates data-quality analysis.
+“Identify claims with missing prescriber IDs, missing prescription dates, or blank diagnosis categories.” — demonstrates multiple quality conditions.
+“Give me an executive summary of the pharmacy claims data, including key statistics, anomalies, and recommendations.” — strongest executive/customer demo.
