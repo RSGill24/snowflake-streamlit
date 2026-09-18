@@ -1,4 +1,1 @@
-SELECT COUNT(DISTINCT grantee_name) AS user_count
-FROM SNOWFLAKE.ACCOUNT_USAGE.GRANTS_TO_USERS
-WHERE role = '<ROLE_NAME>'
-  AND deleted_on IS NULL;
+The Streamlit Data Utility project requires access to Snowflake's native AI functions (e.g., Cortex functions such as COMPLETE, SUMMARIZE, SENTIMENT, TRANSLATE, or EXTRACT_ANSWER) to enable AI-driven data processing and analysis capabilities directly within Snowflake.
