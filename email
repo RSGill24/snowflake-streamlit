@@ -1,31 +1,31 @@
+**Subject: RE: Azure Blob Storage – Source Setup Requirements**
 
-Url - https://pvjmzzp-nuc98633.snowflakecomputing.com
-User name - RSGILL26
-Password -  SEdc@1234567!!
+Hi Tom,
 
+Thank you for the clarification.
 
+For the Data Copy Utility, we propose the following Azure resource names, subject to confirmation that they comply with GEA naming standards:
 
-Snowflake Data Copy Utility – Permission Request / Ticket Guidance
+* **Storage Account:** `geadatacopydev01`
+* **Blob Container:** `data-copy-source`
+* **Blob Folder/Path:** `pharmacy/`
+* **Sample Source File:** `pharmacy_claims.csv`
 
+Please let us know if these names are acceptable or if your team recommends alternatives based on GEA naming standards.
 
-Hi Vaishali,
+Once the Azure storage location is confirmed, could you please create the Snowflake Storage Integration and corresponding external stage?
 
-I am working on deploying the Snowflake Data Copy Utility Streamlit application in Snowflake.
+After creation, please share the following details with us so we can configure the Azure source in our Streamlit application:
 
-I have attached the SQL deployment script that needs to be executed in the Snowflake environment. 
-While trying to execute the setup scripts, I am getting insufficient privilege errors for operations such as database/role creation and granting the required permissions.
+* **Storage Integration name**
+* **External Stage name**, including database and schema
+* **File Format name**, including database and schema
+* **Confirmed Azure Blob path/prefix** configured for the stage
+* Confirmation that the stage can successfully list and read the source files
 
-The attached script includes the required setup for the application, including:
-Application database and schema
-Application roles
-Audit table
-Required warehouse/compute permissions
-Source database/schema access
-Target database/schema access
-Required table-level permissions for the data copy and source-data editing functionality
+Please also ensure that the Streamlit application owner role, `DATA_COPY_APP_OWNER`, has the required privileges to use the integration, stage, and file format, and to list and read the staged files.
 
-Could you please advise whether we should raise one consolidated ticket covering all the required Snowflake permissions/setup, or whether multiple tickets are required for the database/role creation and access grants?
-
-Once the appropriate permissions are provided, I can proceed with the deployment and validation of the Streamlit application.
+Once we receive these details and access is configured, we will update the application settings and perform an end-to-end connectivity and data-load test.
 
 Thanks,
+Rajinder
