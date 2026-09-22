@@ -1,1 +1,4 @@
-The Streamlit Data Utility project requires access to Snowflake's native AI functions (e.g., Cortex functions such as COMPLETE, SUMMARIZE, SENTIMENT, TRANSLATE, or EXTRACT_ANSWER) to enable AI-driven data processing and analysis capabilities directly within Snowflake.
+SELECT
+    SUM(OCTET_LENGTH(TO_JSON(OBJECT_CONSTRUCT_KEEP_NULL(*))))
+        / POWER(1024, 3) AS APPROX_SIZE_GB
+FROM VW_GEHA_CALL_TRANSCRIPTS;
