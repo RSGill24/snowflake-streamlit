@@ -3546,7 +3546,10 @@ with analysis_tab:
                     if "Custom SQL" in dq_checks:
                         if not dq_custom_sql.strip():
                             raise ValueError("Custom SQL is selected. Enter a query in the SQL text area.")
-                        custom_sql = validate_read_only_sql(dq_custom_sql)
+                        custom_sql = validate_read_only_sql(dq_custom_sql).rstrip().rstrip(";")
+                        # Snowpark session.sql() expects the statement without a trailing
+                        # semicolon; remove it after read-only validation to avoid SQL
+                        # compilation errors such as unexpected ';'.
                         # Accept common qualified/unqualified spellings of the selected table.
                         table_pattern = re.compile(
                             rf'(?i)(?<![A-Z0-9_$])(?:"?{re.escape(analysis_db)}"?\s*\.\s*"?{re.escape(analysis_schema)}"?\s*\.\s*)?"?{re.escape(dq_table)}"?(?![A-Z0-9_$])'
