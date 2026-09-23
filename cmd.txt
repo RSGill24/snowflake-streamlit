@@ -1,3 +1,31 @@
+SELECT
+    COUNT_IF(
+        UCID IS NULL
+        OR UUID IS NULL
+        OR TRANSACTION_ID IS NULL
+        OR SOURCE_MEDIA_ID IS NULL
+        OR MEMBER_ID IS NULL
+        OR MEMBER_FIRST_NAME IS NULL
+        OR MEMBER_LAST_NAME IS NULL
+        OR MEMBER_STATE_CODE IS NULL
+        OR MEMBER_DOB IS NULL
+        OR INTERACTION_TIMESTAMP IS NULL
+        OR OVERALL_SENTIMENT_SCORE IS NULL
+        OR SENTIMENT_TRANSITION IS NULL
+    ) AS NULL_VALUE_COUNT
+FROM UM_SH.FOUNDATION.VW_GEHA_CALL_TRANSCRIPTS;
+
+
+
+
+
+
+
+
+
+
+
+
 Customer Sentiment Analysis: What are the most common reasons for negative member sentiment across GEHA call transcripts?
 Call Center Performance: Is there a relationship between customer hold time, call duration, and negative sentiment?
 Topic Analysis: What are the most frequently discussed topics in member calls, and which topics generate the most complaints?
