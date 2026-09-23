@@ -3515,31 +3515,47 @@ with analysis_tab:
         elif analysis_mode == "Data Quality Checks":
             st.markdown("### Data Quality Checks")
             dq_table = st.selectbox("Dataset for quality checks", analysis_tables, key="dq_table_generic")
+            dq_options = ["Row Count", "Null Values", "Blank Strings", "Negative Numbers", "Duplicate Rows", "Invalid Dates", "Custom SQL"]
             dq_checks = st.multiselect(
-                "Built-in checks",
-                ["Row Count", "Null Values", "Blank Strings", "Negative Numbers", "Duplicate Rows", "Invalid Dates"],
+                "Checks to run",
+                dq_options,
                 default=["Row Count", "Null Values", "Duplicate Rows"],
                 key="dq_checks_generic",
             )
-            dq_custom_sql = st.text_area(
-                "Custom SQL quality query (read-only SELECT/WITH)",
-                placeholder=f"Write a SELECT query against {analysis_db}.{analysis_schema}.{dq_table}.",
-                key="custom_dq_sql",
-                height=150,
-            )
+            dq_custom_sql = ""
+            if "Custom SQL" in dq_checks:
+                dq_custom_sql = st.text_area(
+                    "Custom SQL quality query (read-only SELECT/WITH)",
+                    placeholder=(
+                        f"Write a SELECT query against {analysis_db}.{analysis_schema}.{dq_table}. "
+                        "Example: SELECT COUNT_IF(MEMBER_ID IS NULL) AS NULL_COUNT "
+                        f"FROM {analysis_db}.{analysis_schema}.{dq_table}"
+                    ),
+                    key="custom_dq_sql",
+                    height=150,
+                )
             if st.button("Run Data Quality Checks", key="run_dq_generic", use_container_width=True):
                 try:
-                    if dq_checks:
-                        dq_sql = build_quality_sql(analysis_db, analysis_schema, dq_table, dq_checks)
+                    st.session_state["generic_dq_result"] = None
+                    st.session_state["custom_dq_result"] = None
+                    builtin_checks = [check for check in dq_checks if check != "Custom SQL"]
+                    if builtin_checks:
+                        dq_sql = build_quality_sql(analysis_db, analysis_schema, dq_table, builtin_checks)
                         validate_read_only_sql(dq_sql)
                         st.session_state["generic_dq_result"] = session.sql(dq_sql).to_pandas()
-                    if dq_custom_sql.strip():
+                    if "Custom SQL" in dq_checks:
+                        if not dq_custom_sql.strip():
+                            raise ValueError("Custom SQL is selected. Enter a query in the SQL text area.")
                         custom_sql = validate_read_only_sql(dq_custom_sql)
-                        if full_name(analysis_db, analysis_schema, dq_table).lower() not in custom_sql.lower():
+                        # Accept common qualified/unqualified spellings of the selected table.
+                        table_pattern = re.compile(
+                            rf'(?i)(?<![A-Z0-9_$])(?:"?{re.escape(analysis_db)}"?\s*\.\s*"?{re.escape(analysis_schema)}"?\s*\.\s*)?"?{re.escape(dq_table)}"?(?![A-Z0-9_$])'
+                        )
+                        if not table_pattern.search(custom_sql):
                             raise ValueError("Custom SQL must reference the selected table.")
                         st.session_state["custom_dq_result"] = session.sql(custom_sql).to_pandas()
-                    if not dq_checks and not dq_custom_sql.strip():
-                        raise ValueError("Select at least one built-in check or enter a custom SQL query.")
+                    if not dq_checks:
+                        raise ValueError("Select at least one built-in check or Custom SQL.")
                 except Exception as exc:
                     st.error(f"Data quality checks failed: {exc}")
             if st.session_state.get("generic_dq_result") is not None:
