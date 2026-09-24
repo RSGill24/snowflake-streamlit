@@ -1,1 +1,5 @@
-How often does the member on the call recording differ from the member recorded in call details?
+What percentage of calls in call details have a matching record in CallTrak, and what percentage have a matching transcript?
+How many answered calls from yesterday have no CallTrak record?
+How many answered calls have no transcript?
+Are there transcripts or CallTrak records that have no matching call in call details?
+How many records in each view have a missing call ID or member ID?
