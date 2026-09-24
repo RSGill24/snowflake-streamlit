@@ -1,31 +1,9 @@
-**Subject: RE: Azure Blob Storage – Source Setup Requirements**
+The primary use cases are:
+Copying data between Snowflake tables.
+Creating target tables based on source table structures.
+Copying data using the supported copy modes.
+Loading supported files from Azure Blob Storage into Snowflake.
+Performing data quality checks on selected datasets.
+Running Cortex-based analysis on supported data.
+Allowing users to review processing results and identify data quality issues.
 
-Hi Tom,
-
-Thank you for the clarification.
-
-For the Data Copy Utility, we propose the following Azure resource names, subject to confirmation that they comply with GEA naming standards:
-
-* **Storage Account:** `geadatacopydev01`
-* **Blob Container:** `data-copy-source`
-* **Blob Folder/Path:** `pharmacy/`
-* **Sample Source File:** `pharmacy_claims.csv`
-
-Please let us know if these names are acceptable or if your team recommends alternatives based on GEA naming standards.
-
-Once the Azure storage location is confirmed, could you please create the Snowflake Storage Integration and corresponding external stage?
-
-After creation, please share the following details with us so we can configure the Azure source in our Streamlit application:
-
-* **Storage Integration name**
-* **External Stage name**, including database and schema
-* **File Format name**, including database and schema
-* **Confirmed Azure Blob path/prefix** configured for the stage
-* Confirmation that the stage can successfully list and read the source files
-
-Please also ensure that the Streamlit application owner role, `DATA_COPY_APP_OWNER`, has the required privileges to use the integration, stage, and file format, and to list and read the staged files.
-
-Once we receive these details and access is configured, we will update the application settings and perform an end-to-end connectivity and data-load test.
-
-Thanks,
-Rajinder
