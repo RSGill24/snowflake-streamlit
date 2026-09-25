@@ -1,13 +1,3 @@
-ls @BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG
-RBA_STL_EDW_OWNER
+DESC STAGE BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG;
 
-azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model	0		Thu, 11 Jun 2026 20:58:32 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_label.parquet	5524543	26eedaf678d70eb3ad04700eb8ba3123	Tue, 7 Jul 2026 17:58:38 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_label_predictions_dataset.parquet	2863585	7c16012de8179ea919c1bd1da4c11de3	Thu, 11 Jun 2026 22:07:34 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_train.parquet	6539320	2e258e1ce43f4a41589331106e81757c	Tue, 7 Jul 2026 17:57:49 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common	0		Thu, 19 Feb 2026 07:05:20 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client	0		Thu, 19 Feb 2026 07:05:20 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client/client.parquet	2667		Thu, 19 Feb 2026 07:05:20 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client/client_schema.parquet	855		Thu, 19 Feb 2026 07:05:20 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.datedimension	0		Thu, 19 Feb 2026 07:05:20 GMT
-azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.datedimension/datedimension.parquet	575978		Thu, 19 Feb 2026 07:05:20 GMT
+LS @BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG;
