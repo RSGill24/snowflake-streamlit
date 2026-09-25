@@ -1,1 +1,8 @@
 Unable to list Parquet files from the stage: (1304): 01c74f3a-0306-1ca0-002f-cf037d7da77a: 002003 (02000): SQL compilation error: Database 'BRONZE_DB' does not exist or not authorized.
+SELECT *
+FROM @BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG/churn_model/fehb_churn_label.parquet
+LIMIT 10;
+
+SELECT *
+FROM @BRONZE_DB.AZURE_STGEHAEDP_STG/churn_model/fehb_churn_label.parquet
+LIMIT 10;
