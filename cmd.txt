@@ -1,9 +1,10 @@
 SELECT *
-FROM @BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG/churn_model/fehb_churn_label.parquet
-(
-    FILE_FORMAT => (TYPE => PARQUET)
-)
-LIMIT 10;
+FROM TABLE(
+    INFER_SCHEMA(
+        LOCATION => '@BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG/churn_model/fehb_churn_label.parquet',
+        FILE_FORMAT => '(TYPE => PARQUET)'
+    )
+);
 
 
 
