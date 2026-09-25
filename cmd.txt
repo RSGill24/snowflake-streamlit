@@ -1,69 +1,12 @@
-SELECT CURRENT_ROLE(), CURRENT_DATABASE(), CURRENT_SCHEMA();
+ls @BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG
 
-SHOW DATABASES LIKE 'BRONZE_DB';
-
-SHOW SCHEMAS IN DATABASE BRONZE_DB;
-
-SHOW STAGES IN SCHEMA BRONZE_DB.EDL_BRONZE_ADLS;
-
-GRANT USAGE ON DATABASE BRONZE_DB TO ROLE <APP_ROLE>;
-
-GRANT USAGE ON SCHEMA BRONZE_DB.EDL_BRONZE_ADLS
-TO ROLE <APP_ROLE>;
-
-GRANT USAGE ON STAGE
-BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG
-TO ROLE <APP_ROLE>;
-2026-09-24 15:39:10.790 -0500	READ	STAGE	BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG	ROLE	RBA_STL_EDW_OWNER	false	RBA_ACOE_DEVELOPER-ADMIN	ROLE
-2026-09-24 14:03:56.840 -0500	USAGE	STAGE	BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG	ROLE	RBA_STL_EDW_OWNER	false	RBA_ACOE_DEVELOPER-ADMIN	ROLE
-2026-09-24 15:39:10.861 -0500	WRITE	STAGE	BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG	ROLE	RBA_STL_EDW_OWNER	false	RBA_ACOE_DEVELOPER-ADMIN	ROLE
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-CREATE OR REPLACE STORAGE INTEGRATION AZURE_STGEHAEDP_STR_INT
-
-  TYPE = EXTERNAL_STAGE
-
-  STORAGE_PROVIDER = AZURE
-
-  ENABLED = TRUE
-
-  AZURE_TENANT_ID = 'b7c537d8-4835-4261-b3ad-6a6d8cbb84b2'
-
-  USE_PRIVATELINK_ENDPOINT = TRUE
-
-  STORAGE_ALLOWED_LOCATIONS = (
-
-      'azure://stgehaedpdev01.blob.core.windows.net/landing/'
-
-  );  
- 
-CREATE or replace STAGE BRONZE_DB.EDL_BRONZE_ADLS.AZURE_STGEHAEDP_STG
-
-URL = 'azure://stgehaedpstg01.blob.core.windows.net/landing/'
-
-STORAGE_INTEGRATION = AZURE_STGEHAEDP_STR_INT;
- 
-file format wasn't added
- 
-this was existing so it was already able to list
- 
-but you can login and do a ls
- 
- 
+azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model	0		Thu, 11 Jun 2026 20:58:32 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_label.parquet	5524543	26eedaf678d70eb3ad04700eb8ba3123	Tue, 7 Jul 2026 17:58:38 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_label_predictions_dataset.parquet	2863585	7c16012de8179ea919c1bd1da4c11de3	Thu, 11 Jun 2026 22:07:34 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/churn_model/fehb_churn_train.parquet	6539320	2e258e1ce43f4a41589331106e81757c	Tue, 7 Jul 2026 17:57:49 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common	0		Thu, 19 Feb 2026 07:05:20 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client	0		Thu, 19 Feb 2026 07:05:20 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client/client.parquet	2667		Thu, 19 Feb 2026 07:05:20 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.client/client_schema.parquet	855		Thu, 19 Feb 2026 07:05:20 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.datedimension	0		Thu, 19 Feb 2026 07:05:20 GMT
+azure://stgehaedpdev01.blob.core.windows.net/landing/common/dbo.datedimension/datedimension.parquet	575978		Thu, 19 Feb 2026 07:05:20 GMT
