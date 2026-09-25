@@ -6,3 +6,7 @@ LIMIT 10;
 SELECT *
 FROM @BRONZE_DB.AZURE_STGEHAEDP_STG/churn_model/fehb_churn_label.parquet
 LIMIT 10;
+NameError: name 'analysis_schema' is not defined
+Traceback:
+File "/tmp/appRoot/streamlit_app.py", line 3715, in <module>
+    elif not analysis_schema or not analysis_tables:
