@@ -1,1 +1,2 @@
 Unable to infer Azure file structure: The selected Parquet file is empty; no columns could be discovered.
+Unable to infer Azure file structure: The selected Parquet file contains no data rows.
