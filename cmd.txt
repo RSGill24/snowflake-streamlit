@@ -1,19 +1,29 @@
-streamlit.errors.StreamlitDuplicateElementKey: There are multiple elements with the same key='azure_target_table'. To fix this, please make sure that the key argument is unique for each element you create.
+1. Select Source and Target
+Source
+Source Type
 
+
+Snowflake Table
+
+
+Azure Blob Storage
+
+Source Database
+
+SANDBOX_DB
+Source Schema
+
+EDW_STL_POC_SRC
+Target
+Target Database
+
+EDW_STREAMLIT_POC_DB
+Target Schema
+
+STREAMLIT_DATA_UTILITY
+
+NameError: name 'analysis_schema' is not defined
 Traceback:
-File "/tmp/appRoot/streamlit_app.py", line 2401, in <module>
-    azure_target_table = st.selectbox(
-                         ^^^^^^^^^^^^^
-File "/usr/lib/python_udf/c9352786af7573c56f3316660b1169b4c6f6622ac6356c24623ce0074e70a9a2/lib/python3.11/site-packages/streamlit/runtime/metrics_util.py", line 531, in wrapped_func
-    result = non_optional_func(*args, **kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/usr/lib/python_udf/c9352786af7573c56f3316660b1169b4c6f6622ac6356c24623ce0074e70a9a2/lib/python3.11/site-packages/streamlit/elements/widgets/selectbox.py", line 470, in selectbox
-    return self._selectbox(
-           ^^^^^^^^^^^^^^^^
-File "/usr/lib/python_udf/c9352786af7573c56f3316660b1169b4c6f6622ac6356c24623ce0074e70a9a2/lib/python3.11/site-packages/streamlit/elements/widgets/selectbox.py", line 542, in _selectbox
-    element_id = compute_and_register_element_id(
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/usr/lib/python_udf/c9352786af7573c56f3316660b1169b4c6f6622ac6356c24623ce0074e70a9a2/lib/python3.11/site-packages/streamlit/elements/lib/utils.py", line 265, in compute_and_register_element_id
-    _register_element_id(ctx, element_type, element_id)
-File "/usr/lib/python_udf/c9352786af7573c56f3316660b1169b4c6f6622ac6356c24623ce0074e70a9a2/lib/python3.11/site-packages/streamlit/elements/lib/utils.py", line 145, in _register_element_id
-    raise StreamlitDuplicateElementKey(user_key)
+File "/tmp/appRoot/streamlit_app.py", line 3779, in <module>
+    elif not analysis_schema or not analysis_tables:
+             ^^^^^^^^^^^^^^^
