@@ -27,3 +27,13 @@ Traceback:
 File "/tmp/appRoot/streamlit_app.py", line 3779, in <module>
     elif not analysis_schema or not analysis_tables:
              ^^^^^^^^^^^^^^^
+Copy Data from Azure Blob Storage
+Select an Azure Blob file, review the inferred table structure and CREATE TABLE SQL, create the target table, then load the file with Snowflake COPY INTO.
+
+name 'Path' is not defined
+
+NameError: name 'analysis_schema' is not defined
+Traceback:
+File "/tmp/appRoot/streamlit_app.py", line 3779, in <module>
+    elif not analysis_schema or not analysis_tables:
+             ^^^^^^^^^^^^^^^
