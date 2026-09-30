@@ -1,10 +1,1 @@
-CREATE TABLE "EDW_STREAMLIT_POC_DB"."STREAMLIT_DATA_UTILITY"."FEHB_CHURN_TRAIN" (
-    "$1" VariantType()
-);
-
-
-
-Target table creation failed: (1304): 01c76c55-0206-6c85-002f-cf037dd08392: 001003 (42000): SQL compilation error: syntax error line 2 at position 21 unexpected ')'.
-
-CORRECT 
-CREATE TABLE "EDW_STREAMLIT_POC_DB"."STREAMLIT_DATA_UTILITY"."FEHB_CHURN_LABEL" ("1" VARIANT);
+Azure Blob load failed: (1304): 01c76c5d-0206-6c85-002f-cf037dd0860e: 002018 (22023): SQL compilation error: Invalid argument [FILE_FORMAT=>[unresolved function: "="](TYPE, PARQUET)] for table function. Table function argument is required to be a constant.
