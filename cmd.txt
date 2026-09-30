@@ -1,1 +1,10 @@
-Unable to infer Azure file structure: (1304): 01c76c46-0206-6c85-002f-cf037dcfeda2: 001003 (42000): SQL compilation error: syntax error line 5 at position 29 unexpected '=>'. syntax error line 5 at position 42 unexpected ','. syntax error line 6 at position 14 unexpected '=>'.
+CREATE TABLE "EDW_STREAMLIT_POC_DB"."STREAMLIT_DATA_UTILITY"."FEHB_CHURN_TRAIN" (
+    "$1" VariantType()
+);
+
+
+
+Target table creation failed: (1304): 01c76c55-0206-6c85-002f-cf037dd08392: 001003 (42000): SQL compilation error: syntax error line 2 at position 21 unexpected ')'.
+
+CORRECT 
+CREATE TABLE "EDW_STREAMLIT_POC_DB"."STREAMLIT_DATA_UTILITY"."FEHB_CHURN_LABEL" ("1" VARIANT);
