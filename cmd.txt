@@ -1,1 +1,1 @@
-Unable to infer Azure file structure: (1304): 01c76c37-0206-6c85-002f-cf037dcfe6de: 090236 (42601): Stored procedure execution error: Unsupported statement type 'temporary FILE_FORMAT'.
+Unable to infer Azure file structure: (1304): 01c76c46-0206-6c85-002f-cf037dcfeda2: 001003 (42000): SQL compilation error: syntax error line 5 at position 29 unexpected '=>'. syntax error line 5 at position 42 unexpected ','. syntax error line 6 at position 14 unexpected '=>'.
