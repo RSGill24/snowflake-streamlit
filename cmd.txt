@@ -11,3 +11,6 @@ CREATE TABLE IF NOT EXISTS APPS_DB.EDW.DATA_COPY_FEEDBACK
 );
 
 Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
+
+azure blob is loading data but giving this error 
+Azure Blob load failed: name 'azure_copy_mode' is not defined
