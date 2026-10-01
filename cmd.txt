@@ -1,2 +1,11 @@
-Unable to infer Azure file structure: The selected Parquet file is empty; no columns could be discovered.
-Unable to infer Azure file structure: The selected Parquet file contains no data rows.
+CREATE TABLE IF NOT EXISTS APPS_DB.EDW.DATA_COPY_FEEDBACK
+(
+    FEEDBACK_ID      VARCHAR,
+    SUBMITTED_AT     TIMESTAMP_NTZ,
+    SUBMITTED_BY     VARCHAR,
+    RATING           NUMBER(1,0),
+    FEEDBACK_TYPE    VARCHAR,
+    COMMENTS         VARCHAR,
+    RELATED_RUN_ID   VARCHAR,
+    APPLICATION      VARCHAR
+);
