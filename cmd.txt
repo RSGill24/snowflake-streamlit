@@ -9,3 +9,5 @@ CREATE TABLE IF NOT EXISTS APPS_DB.EDW.DATA_COPY_FEEDBACK
     RELATED_RUN_ID   VARCHAR,
     APPLICATION      VARCHAR
 );
+
+Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
