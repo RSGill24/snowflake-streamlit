@@ -1,16 +1,1 @@
-CREATE TABLE IF NOT EXISTS APPS_DB.EDW.DATA_COPY_FEEDBACK
-(
-    FEEDBACK_ID      VARCHAR,
-    SUBMITTED_AT     TIMESTAMP_NTZ,
-    SUBMITTED_BY     VARCHAR,
-    RATING           NUMBER(1,0),
-    FEEDBACK_TYPE    VARCHAR,
-    COMMENTS         VARCHAR,
-    RELATED_RUN_ID   VARCHAR,
-    APPLICATION      VARCHAR
-);
-
-Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
-
-azure blob is loading data but giving this error 
-Azure Blob load failed: name 'azure_copy_mode' is not defined
+Parquet analysis failed: Parquet analysis failed after 3 attempts: (1304): 01c77728-0206-70b8-002f-cf037df207a6: 000904 (42000): SQL compilation error: error line 123 at position 28 invalid identifier 'CLAIM_CONTROL_NBR'
