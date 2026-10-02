@@ -1,3 +1,44 @@
+st.session_state["feedback_comments"] = ""
+
+
+if st.button("Submit Feedback", type="primary", use_container_width=True, key="submit_feedback"):
+    if not feedback_comments.strip():
+        st.error("Please enter your comments before submitting feedback.")
+    else:
+        try:
+            feedback_id = write_feedback(
+                feedback_rating, feedback_type, feedback_comments.strip(), related_run_id
+            )
+            st.success("Thank you. Your feedback has been submitted successfully.")
+            st.info(f"Feedback ID: {feedback_id}")
+        except Exception as exc:
+            st.error(f"Unable to submit feedback: {exc}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Parquet analysis failed: Parquet analysis failed after 3 attempts: (1304): 01c77728-0206-70b8-002f-cf037df207a6: 000904 (42000): SQL compilation error: error line 123 at position 28 invalid identifier 'CLAIM_CONTROL_NBR'
 
 Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
