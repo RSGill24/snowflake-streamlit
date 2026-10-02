@@ -1,3 +1,8 @@
 Parquet analysis failed: Parquet analysis failed after 3 attempts: (1304): 01c77728-0206-70b8-002f-cf037df207a6: 000904 (42000): SQL compilation error: error line 123 at position 28 invalid identifier 'CLAIM_CONTROL_NBR'
 
 Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
+Thank you. Your feedback has been submitted successfully.
+
+Feedback ID: 6cef1523-7aa0-4c5f-92ab-bca02dc0fa44
+
+Unable to submit feedback: st.session_state.feedback_comments cannot be modified after the widget with key feedback_comments is instantiated.
